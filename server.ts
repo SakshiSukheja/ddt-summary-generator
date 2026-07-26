@@ -176,11 +176,54 @@ If any specific detail is not explicitly present in the files, synthesize the mo
     // Helper to strip base64 data prefix
     const cleanBase64 = (str: string) => str.replace(/^data:[^;]+;base64,/, '');
 
+    // Helper to sanitize and normalize MIME types for Gemini media parts
+    const sanitizeMimeType = (filePayload: { fileName?: string; fileType?: string } | null, isAudioRecording = false): string => {
+      if (!filePayload) return 'application/octet-stream';
+
+      const fileName = (filePayload.fileName || '').toLowerCase();
+      let mime = (filePayload.fileType || '').toLowerCase().trim();
+
+      // Infer from extension if missing or generic
+      if (!mime || mime === 'application/octet-stream' || mime === 'binary/octet-stream') {
+        if (fileName.endsWith('.mp3')) mime = 'audio/mp3';
+        else if (fileName.endsWith('.m4a')) mime = 'audio/mp4';
+        else if (fileName.endsWith('.wav')) mime = 'audio/wav';
+        else if (fileName.endsWith('.aac')) mime = 'audio/aac';
+        else if (fileName.endsWith('.ogg')) mime = 'audio/ogg';
+        else if (fileName.endsWith('.3gp')) mime = 'audio/3gpp';
+        else if (fileName.endsWith('.mp4')) mime = isAudioRecording ? 'audio/mp4' : 'video/mp4';
+        else if (fileName.endsWith('.webm')) mime = isAudioRecording ? 'audio/webm' : 'video/webm';
+        else if (fileName.endsWith('.pdf')) mime = 'application/pdf';
+        else if (fileName.endsWith('.jpg') || fileName.endsWith('.jpeg')) mime = 'image/jpeg';
+        else if (fileName.endsWith('.png')) mime = 'image/png';
+        else if (fileName.endsWith('.webp')) mime = 'image/webp';
+      }
+
+      // For call recording files, ensure video/mp4, video/3gpp, etc. are converted to audio/* MIME types
+      // so Gemini transcribes the audio stream instead of attempting video frame decoding (which throws "0 Frames found")
+      if (isAudioRecording) {
+        if (mime.startsWith('video/mp4') || mime === 'video/m4a' || fileName.endsWith('.m4a') || fileName.endsWith('.mp4')) {
+          return 'audio/mp4';
+        }
+        if (mime.startsWith('video/3gpp') || fileName.endsWith('.3gp')) {
+          return 'audio/3gpp';
+        }
+        if (mime.startsWith('video/webm')) {
+          return 'audio/webm';
+        }
+        if (mime.startsWith('video/')) {
+          return 'audio/mp4';
+        }
+      }
+
+      return mime || (isAudioRecording ? 'audio/mp3' : 'application/pdf');
+    };
+
     // Add Call Recording Audio/Video part if attached
     if (callRecording && callRecording.base64) {
       parts.push({
         inlineData: {
-          mimeType: callRecording.fileType || 'audio/mp3',
+          mimeType: sanitizeMimeType(callRecording, true),
           data: cleanBase64(callRecording.base64),
         },
       });
@@ -190,7 +233,7 @@ If any specific detail is not explicitly present in the files, synthesize the mo
     if (estimateLetter && estimateLetter.base64) {
       parts.push({
         inlineData: {
-          mimeType: estimateLetter.fileType || 'application/pdf',
+          mimeType: sanitizeMimeType(estimateLetter, false),
           data: cleanBase64(estimateLetter.base64),
         },
       });
@@ -202,7 +245,7 @@ If any specific detail is not explicitly present in the files, synthesize the mo
         if (pic && pic.base64) {
           parts.push({
             inlineData: {
-              mimeType: pic.fileType || 'image/jpeg',
+              mimeType: sanitizeMimeType(pic, false),
               data: cleanBase64(pic.base64),
             },
           });
@@ -215,7 +258,7 @@ If any specific detail is not explicitly present in the files, synthesize the mo
         if (pic && pic.base64) {
           parts.push({
             inlineData: {
-              mimeType: pic.fileType || 'image/jpeg',
+              mimeType: sanitizeMimeType(pic, false),
               data: cleanBase64(pic.base64),
             },
           });
