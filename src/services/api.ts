@@ -22,14 +22,35 @@ export async function generateCaseSummary(input: DDTInputForm): Promise<Generate
   return data.caseSummary;
 }
 
+export function inferMimeType(fileName: string): string {
+  const ext = fileName.toLowerCase().split('.').pop() || '';
+  switch (ext) {
+    case 'mp3': return 'audio/mp3';
+    case 'm4a': return 'audio/mp4';
+    case 'wav': return 'audio/wav';
+    case 'aac': return 'audio/aac';
+    case 'ogg': return 'audio/ogg';
+    case '3gp': return 'audio/3gpp';
+    case 'mp4': return 'audio/mp4';
+    case 'webm': return 'audio/webm';
+    case 'pdf': return 'application/pdf';
+    case 'jpg':
+    case 'jpeg': return 'image/jpeg';
+    case 'png': return 'image/png';
+    case 'webp': return 'image/webp';
+    default: return 'application/octet-stream';
+  }
+}
+
 // Convert HTML File object to FilePayload (Base64)
 export function fileToFilePayload(file: File): Promise<FilePayload> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
+      const fileType = file.type && file.type !== 'application/octet-stream' ? file.type : inferMimeType(file.name);
       resolve({
         fileName: file.name,
-        fileType: file.type || 'application/octet-stream',
+        fileType,
         fileSize: file.size,
         base64: reader.result as string,
       });
