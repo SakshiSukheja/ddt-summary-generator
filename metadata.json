@@ -1,0 +1,6 @@
+{
+  "name": "DDT Case Summary Generator",
+  "description": "AI due diligence case summary generator for healthcare crowdfunding, analyzing call recordings and estimate letters for Jira cards.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
