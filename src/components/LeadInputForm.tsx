@@ -14,9 +14,12 @@ import {
   FileCheck,
   Plus,
   Trash2,
+  Zap,
+  Loader2,
 } from 'lucide-react';
 import { DDTInputForm, FilePayload } from '../types';
 import { fileToFilePayload } from '../services/api';
+import { compressAudioForVercel } from '../utils/audioCompressor';
 
 const DEFAULT_BD_LIST = [
   'Rohan Sharma',
@@ -46,6 +49,9 @@ export const LeadInputForm: React.FC<LeadInputFormProps> = ({
   const [audioDragOver, setAudioDragOver] = useState(false);
   const [docDragOver, setDocDragOver] = useState(false);
   const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null);
+  const [isCompressingAudio, setIsCompressingAudio] = useState(false);
+  const [compressProgressMsg, setCompressProgressMsg] = useState('');
+  const [compressedInfoBadge, setCompressedInfoBadge] = useState<string | null>(null);
 
   // BD List state & manager modal
   const [bdList, setBdList] = useState<string[]>(() => {
@@ -127,9 +133,43 @@ export const LeadInputForm: React.FC<LeadInputFormProps> = ({
   const MAX_RECOMMENDED_BYTES = 3.2 * 1024 * 1024; // 3.2MB binary = ~4.4MB Base64
 
   const handleAudioUpload = async (file: File) => {
-    if (file.size > MAX_RECOMMENDED_BYTES) {
-      alert(`⚠️ Vercel Payload Size Warning:\n\nThis audio file is ${(file.size / (1024 * 1024)).toFixed(1)} MB.\nVercel serverless functions have a strict 4.5 MB HTTP request limit (~3.2 MB binary file limit).\n\nPlease compress this audio clip (e.g. 32kbps/64kbps MP3) or trim it under 3.2 MB so it can be processed without a 413 error on Vercel.`);
+    setCompressedInfoBadge(null);
+
+    // If file is larger than 2.8MB, automatically compress/resample it in browser
+    if (file.size > 2.8 * 1024 * 1024) {
+      setIsCompressingAudio(true);
+      setCompressProgressMsg('Initializing Web Audio Engine...');
+      try {
+        const result = await compressAudioForVercel(
+          file,
+          { targetMaxMB: 2.8 },
+          (msg) => setCompressProgressMsg(msg)
+        );
+
+        onChange({ callRecording: result.payload });
+        setCompressedInfoBadge(
+          `⚡ Auto-compressed in browser from ${result.originalMB.toFixed(1)}MB down to ${result.newMB.toFixed(2)}MB`
+        );
+
+        // Preview generated compressed audio
+        setAudioPreviewUrl(result.payload.base64);
+      } catch (err) {
+        console.error('Error auto-compressing audio file:', err);
+        // Fallback to normal upload
+        try {
+          const payload = await fileToFilePayload(file);
+          onChange({ callRecording: payload });
+          const objectUrl = URL.createObjectURL(file);
+          setAudioPreviewUrl(objectUrl);
+        } catch (e) {
+          alert('Could not read audio file. Please try an MP3, WAV, or M4A file.');
+        }
+      } finally {
+        setIsCompressingAudio(false);
+      }
+      return;
     }
+
     try {
       const payload = await fileToFilePayload(file);
       onChange({ callRecording: payload });
@@ -463,7 +503,15 @@ export const LeadInputForm: React.FC<LeadInputFormProps> = ({
                 <span className="text-[10px] text-amber-600 font-medium">Max ~3.2MB (Vercel Serverless)</span>
               </div>
 
-              {!form.callRecording ? (
+              {isCompressingAudio ? (
+                <div className="border-2 border-dashed border-emerald-300 bg-emerald-50/50 rounded-xl p-5 text-center flex flex-col items-center justify-center gap-2">
+                  <Loader2 className="w-6 h-6 text-emerald-600 animate-spin" />
+                  <div>
+                    <p className="text-xs font-bold text-emerald-900">Auto-Compressing Audio for Vercel...</p>
+                    <p className="text-[11px] text-emerald-700 mt-0.5">{compressProgressMsg || 'Resampling speech track...'}</p>
+                  </div>
+                </div>
+              ) : !form.callRecording ? (
                 <div
                   onDragOver={(e) => {
                     e.preventDefault();
@@ -500,7 +548,7 @@ export const LeadInputForm: React.FC<LeadInputFormProps> = ({
                     Drop DDT Call Recording
                   </p>
                   <p className="text-[11px] text-slate-400 mt-0.5">
-                    MP3, M4A, WAV, 3GP (Compressed under 3.2MB for Vercel)
+                    MP3, M4A, WAV, 3GP (Large files auto-compressed in browser)
                   </p>
                 </div>
               ) : (
@@ -524,12 +572,20 @@ export const LeadInputForm: React.FC<LeadInputFormProps> = ({
                       onClick={() => {
                         onChange({ callRecording: null });
                         setAudioPreviewUrl(null);
+                        setCompressedInfoBadge(null);
                       }}
                       className="text-slate-400 hover:text-rose-600 p-1 rounded-lg hover:bg-white/50 transition-colors cursor-pointer"
                     >
                       <X className="w-4 h-4" />
                     </button>
                   </div>
+
+                  {compressedInfoBadge && (
+                    <div className="px-2 py-1 bg-emerald-100 border border-emerald-300 rounded text-[11px] font-semibold text-emerald-800 flex items-center gap-1">
+                      <Zap className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      <span>{compressedInfoBadge}</span>
+                    </div>
+                  )}
 
                   {audioPreviewUrl && (
                     <audio controls src={audioPreviewUrl} className="w-full h-8 mt-1 rounded" />
