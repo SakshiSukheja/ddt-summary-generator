@@ -1,12 +1,19 @@
 import { DDTInputForm, GeneratedCaseSummary, CaseHistoryItem, FilePayload } from '../types';
 
 export async function generateCaseSummary(input: DDTInputForm): Promise<GeneratedCaseSummary> {
+  const jsonBody = JSON.stringify(input);
+  // Vercel serverless payload limit is strictly 4.5 MB (4,718,592 bytes)
+  if (jsonBody.length > 4.4 * 1024 * 1024) {
+    const totalMb = (jsonBody.length / (1024 * 1024)).toFixed(1);
+    throw new Error(`The uploaded files exceed Vercel serverless payload size limit (4.5MB). Your request is ${totalMb}MB. Please upload a smaller audio clip (under 3MB) or shorter PDF.`);
+  }
+
   const response = await fetch('/api/generate-summary', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(input),
+    body: jsonBody,
   });
 
   const rawText = await response.text();
