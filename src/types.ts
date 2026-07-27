@@ -8,7 +8,6 @@ export interface FilePayload {
 export interface DDTInputForm {
   patientName: string;
   bdName: string;
-  cmName: string;
   shootDate: string;
   shootLocation: 'Hospital' | 'Home';
   source: string;
@@ -43,7 +42,6 @@ export interface ParsedCaseDetails {
   city: string;
   hospitalName: string;
   hospitalAddress: string;
-  cmName: string;
   bdName: string;
   estimateAttached: boolean;
   doesEstimateHaveStampSeal: boolean;
@@ -74,7 +72,6 @@ export interface GeneratedCaseSummary {
   createdAt: string;
   patientName: string;
   bdName: string;
-  cmName: string;
   shootDate: string;
   jiraCardText: string;
   parsedDetails: ParsedCaseDetails;

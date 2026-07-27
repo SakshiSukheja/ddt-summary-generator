@@ -37,10 +37,9 @@ export default function App() {
   const [form, setForm] = useState<DDTInputForm>({
     patientName: '',
     bdName: '',
-    cmName: '',
     shootDate: new Date().toISOString().split('T')[0],
     shootLocation: 'Hospital',
-    source: 'Outbound',
+    source: 'Outbound Medical',
     callRecording: null,
     estimateLetter: null,
     oldPics: [],
@@ -74,10 +73,9 @@ export default function App() {
     setForm({
       patientName: '',
       bdName: '',
-      cmName: '',
       shootDate: new Date().toISOString().split('T')[0],
       shootLocation: 'Hospital',
-      source: 'Outbound',
+      source: 'Outbound Medical',
       callRecording: null,
       estimateLetter: null,
       oldPics: [],
@@ -138,7 +136,6 @@ export default function App() {
     setForm({
       patientName: summary.patientName || '',
       bdName: summary.bdName || '',
-      cmName: summary.cmName || '',
       shootDate: summary.shootDate || new Date().toISOString().split('T')[0],
       shootLocation: 'Hospital',
       source: 'Outbound',
@@ -290,7 +287,7 @@ export default function App() {
                     Ready to Generate Due Diligence Case Summary
                   </h3>
                   <p className="text-xs text-slate-500 leading-relaxed">
-                    Attach a DDT call recording in Hindi, English, or any Indian regional language along with the hospital estimate letter. Gemini 3.6 Flash will extract all details and format them directly for Jira.
+                    Attach a DDT call recording in Hindi, English, or any Indian regional language along with the hospital estimate letter. AI will extract all details and format them directly for Jira.
                   </p>
                 </div>
 
@@ -317,7 +314,6 @@ export default function App() {
           <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
           <span>DDT Analysis Engine • Multimodal Multilingual AI</span>
         </div>
-        <div>Gemini 3.6 Flash Active • Clean Minimalism Theme</div>
       </footer>
 
       {/* Side History Drawer */}

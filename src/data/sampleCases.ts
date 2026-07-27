@@ -3,10 +3,9 @@ import { DDTInputForm, GeneratedCaseSummary } from '../types';
 export const SAMPLE_INPUT_BABY_PRIYANKA: DDTInputForm = {
   patientName: 'Baby of Priyanka',
   bdName: 'Rohan Sharma',
-  cmName: 'Sumit Chaurasiya',
   shootDate: new Date().toISOString().split('T')[0],
   shootLocation: 'Hospital',
-  source: 'Outbound',
+  source: 'Outbound Medical',
   callRecording: {
     fileName: 'DDT_Call_Recording_Priyanka_Hindi.mp3',
     fileType: 'audio/mp3',
@@ -43,7 +42,6 @@ export const SAMPLE_GENERATED_SUMMARY_BABY_PRIYANKA: GeneratedCaseSummary = {
   createdAt: new Date().toISOString(),
   patientName: 'Baby of Priyanka',
   bdName: 'Rohan Sharma',
-  cmName: 'Sumit Chaurasiya',
   shootDate: new Date().toISOString().split('T')[0],
   jiraCardText: `Shoot Date:- ${new Date().toISOString().split('T')[0]} Confirmed with the campaigner
 BD Name: Rohan Sharma
@@ -90,7 +88,7 @@ Shoot will be done at the Hospital. Mother, Father and Patient will be available
 Medibuddy was explained and confirmed by the campaigner.
 
 
-Note: Sumit Chaurasiya will collect a consent letter at the time of the photoshoot.
+Note: Rohan Sharma will collect a consent letter at the time of the photoshoot.
 (Mother, Father and Patient only will be available for the shoot)
 
 
@@ -102,8 +100,7 @@ City: Thane
 Hospital Name: Horizon Prime Hospital 
 Hospital address: Thane 
 
-CM: Sumit Chaurasiya 
-BDM: Rohan Sharma
+BDM / Case Manager: Rohan Sharma
 
 
 DIY: 
@@ -153,7 +150,6 @@ Family is comfortable with shoot? : Yes`,
     city: 'Thane',
     hospitalName: 'Horizon Prime Hospital',
     hospitalAddress: 'Thane, Maharashtra',
-    cmName: 'Sumit Chaurasiya',
     bdName: 'Rohan Sharma',
     estimateAttached: true,
     doesEstimateHaveStampSeal: true,
@@ -173,7 +169,7 @@ Family is comfortable with shoot? : Yes`,
       'DDT team member explained Medibuddy crowdfunding process and campaign mechanics.',
       'Family has spent 6 Lakhs so far by selling gold, taking loans, and using personal savings.',
       'Father earns 30k/month; no income certificate available currently.',
-      'Case Manager Sumit Chaurasiya will collect physical consent letter during photoshoot.'
+      'BD Rohan Sharma will collect physical consent letter during photoshoot.'
     ],
     englishSummary: 'DDT call conducted in Hindi with campaigner & mother. All medical facts (Extreme premature, NICU stay, RDS) and financial background verified.'
   },

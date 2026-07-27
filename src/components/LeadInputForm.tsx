@@ -9,14 +9,24 @@ import {
   Image as ImageIcon,
   X,
   Sparkles,
-  Check,
   AlertCircle,
-  Play,
   Volume2,
   FileCheck,
+  Plus,
+  Trash2,
 } from 'lucide-react';
 import { DDTInputForm, FilePayload } from '../types';
 import { fileToFilePayload } from '../services/api';
+
+const DEFAULT_BD_LIST = [
+  'Rohan Sharma',
+  'Sumit Chaurasiya',
+  'Priya Verma',
+  'Amit Kumar',
+  'Anjali Singh',
+  'Rahul Mehta',
+  'Vikram Patel',
+];
 
 interface LeadInputFormProps {
   form: DDTInputForm;
@@ -37,17 +47,91 @@ export const LeadInputForm: React.FC<LeadInputFormProps> = ({
   const [docDragOver, setDocDragOver] = useState(false);
   const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null);
 
+  // BD List state & manager modal
+  const [bdList, setBdList] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('ddt_bd_list');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.error('Error loading stored BD list:', e);
+    }
+    return DEFAULT_BD_LIST;
+  });
+
+  const [isBdManagerOpen, setIsBdManagerOpen] = useState(false);
+  const [newBdInput, setNewBdInput] = useState('');
+  const [isCustomBdMode, setIsCustomBdMode] = useState(false);
+
+  // Shoot Date mode state: 'single' | 'range' | 'custom'
+  const [dateMode, setDateMode] = useState<'single' | 'range' | 'custom'>(() => {
+    if (!form.shootDate) return 'single';
+    if (form.shootDate.includes(' to ')) return 'range';
+    if (form.shootDate.length > 10 || !/^\d{4}-\d{2}-\d{2}$/.test(form.shootDate)) return 'custom';
+    return 'single';
+  });
+
+  const [startDate, setStartDate] = useState(() => {
+    if (form.shootDate && form.shootDate.includes(' to ')) {
+      return form.shootDate.split(' to ')[0];
+    }
+    return /^\d{4}-\d{2}-\d{2}$/.test(form.shootDate) ? form.shootDate : new Date().toISOString().split('T')[0];
+  });
+
+  const [endDate, setEndDate] = useState(() => {
+    if (form.shootDate && form.shootDate.includes(' to ')) {
+      return form.shootDate.split(' to ')[1];
+    }
+    return new Date().toISOString().split('T')[0];
+  });
+
   const audioInputRef = useRef<HTMLInputElement>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
   const oldPicsInputRef = useRef<HTMLInputElement>(null);
   const hospitalPicsInputRef = useRef<HTMLInputElement>(null);
 
+  // Save BD List
+  const saveBdList = (newList: string[]) => {
+    setBdList(newList);
+    try {
+      localStorage.setItem('ddt_bd_list', JSON.stringify(newList));
+    } catch (e) {
+      console.error('Error saving BD list:', e);
+    }
+  };
+
+  const handleAddBd = () => {
+    const trimmed = newBdInput.trim();
+    if (!trimmed) return;
+    if (bdList.includes(trimmed)) {
+      alert('This BD Name already exists in the list.');
+      return;
+    }
+    const updated = [...bdList, trimmed];
+    saveBdList(updated);
+    onChange({ bdName: trimmed });
+    setNewBdInput('');
+  };
+
+  const handleDeleteBd = (nameToRemove: string) => {
+    const updated = bdList.filter((n) => n !== nameToRemove);
+    saveBdList(updated);
+    if (form.bdName === nameToRemove) {
+      onChange({ bdName: updated[0] || '' });
+    }
+  };
+
   // Handle Call Recording Upload
   const handleAudioUpload = async (file: File) => {
+    if (file.size > 50 * 1024 * 1024) {
+      alert('File is too large! Please upload an audio file under 50MB.');
+      return;
+    }
     try {
       const payload = await fileToFilePayload(file);
       onChange({ callRecording: payload });
-      // Create Object URL for client-side playback preview
       const objectUrl = URL.createObjectURL(file);
       setAudioPreviewUrl(objectUrl);
     } catch (err) {
@@ -143,45 +227,178 @@ export const LeadInputForm: React.FC<LeadInputFormProps> = ({
             />
           </div>
 
-          {/* BD Name */}
+          {/* BD Name Dropdown & Quick Manager */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
-              <User className="w-3.5 h-3.5 text-blue-600" /> BD Name (Business Dev)
-            </label>
-            <input
-              type="text"
-              value={form.bdName}
-              onChange={(e) => onChange({ bdName: e.target.value })}
-              placeholder="e.g. Rohan Sharma"
-              className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder-slate-400 transition-all outline-none"
-            />
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                <User className="w-3.5 h-3.5 text-blue-600" /> BD Name (Business Dev / Case Manager)
+              </label>
+              <button
+                type="button"
+                onClick={() => setIsBdManagerOpen(true)}
+                className="text-[11px] text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-0.5 hover:underline cursor-pointer"
+              >
+                <Plus className="w-3 h-3" /> Manage List
+              </button>
+            </div>
+
+            {!isCustomBdMode ? (
+              <select
+                value={bdList.includes(form.bdName) ? form.bdName : (form.bdName ? 'CUSTOM' : '')}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === 'MANAGE') {
+                    setIsBdManagerOpen(true);
+                  } else if (val === 'CUSTOM') {
+                    setIsCustomBdMode(true);
+                  } else {
+                    onChange({ bdName: val });
+                  }
+                }}
+                className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-lg px-3 py-2 text-sm text-slate-900 transition-all outline-none"
+              >
+                <option value="">-- Select BD Name --</option>
+                {bdList.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+                {form.bdName && !bdList.includes(form.bdName) && (
+                  <option value="CUSTOM">{form.bdName} (Custom)</option>
+                )}
+                <option value="CUSTOM">✏️ Enter Custom Name...</option>
+                <option value="MANAGE">⚙️ + Add / Edit BD List...</option>
+              </select>
+            ) : (
+              <div className="flex gap-1.5">
+                <input
+                  type="text"
+                  value={form.bdName}
+                  onChange={(e) => onChange({ bdName: e.target.value })}
+                  placeholder="Type custom BD Name..."
+                  autoFocus
+                  className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-lg px-3 py-2 text-sm text-slate-900 transition-all outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setIsCustomBdMode(false)}
+                  className="px-2.5 py-1 text-xs bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-medium transition-colors cursor-pointer"
+                >
+                  Dropdown
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* Case Manager (CM) Name */}
+          {/* Shoot Date (Single Date, Date Range, or Custom Text) */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
-              <User className="w-3.5 h-3.5 text-emerald-600" /> Case Manager (CM) Name
-            </label>
-            <input
-              type="text"
-              value={form.cmName}
-              onChange={(e) => onChange({ cmName: e.target.value })}
-              placeholder="e.g. Sumit Chaurasiya"
-              className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder-slate-400 transition-all outline-none"
-            />
-          </div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                <Calendar className="w-3.5 h-3.5 text-amber-600" /> Shoot Date
+              </label>
+              <div className="flex items-center gap-0.5 bg-slate-100 p-0.5 rounded-md text-[10px] font-medium">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDateMode('single');
+                    const val = startDate || new Date().toISOString().split('T')[0];
+                    onChange({ shootDate: val });
+                  }}
+                  className={`px-1.5 py-0.5 rounded transition-all cursor-pointer ${
+                    dateMode === 'single'
+                      ? 'bg-white text-slate-800 shadow-xs font-bold'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Single Date
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDateMode('range');
+                    const s = startDate || new Date().toISOString().split('T')[0];
+                    const e = endDate || s;
+                    onChange({ shootDate: `${s} to ${e}` });
+                  }}
+                  className={`px-1.5 py-0.5 rounded transition-all cursor-pointer ${
+                    dateMode === 'range'
+                      ? 'bg-white text-slate-800 shadow-xs font-bold'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Date Range
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDateMode('custom');
+                  }}
+                  className={`px-1.5 py-0.5 rounded transition-all cursor-pointer ${
+                    dateMode === 'custom'
+                      ? 'bg-white text-slate-800 shadow-xs font-bold'
+                      : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  Custom
+                </button>
+              </div>
+            </div>
 
-          {/* Shoot Date */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
-              <Calendar className="w-3.5 h-3.5 text-amber-600" /> Shoot Date
-            </label>
-            <input
-              type="date"
-              value={form.shootDate}
-              onChange={(e) => onChange({ shootDate: e.target.value })}
-              className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-lg px-3 py-2 text-sm text-slate-900 transition-all outline-none"
-            />
+            {dateMode === 'single' && (
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setStartDate(val);
+                  onChange({ shootDate: val });
+                }}
+                className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-lg px-3 py-2 text-sm text-slate-900 transition-all outline-none"
+              />
+            )}
+
+            {dateMode === 'range' && (
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <span className="text-[10px] text-slate-400 block mb-0.5 font-medium">Start Date</span>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setStartDate(val);
+                      const end = endDate < val ? val : endDate;
+                      if (endDate < val) setEndDate(val);
+                      onChange({ shootDate: `${val} to ${end}` });
+                    }}
+                    className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 transition-all outline-none"
+                  />
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 block mb-0.5 font-medium">End Date</span>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setEndDate(val);
+                      onChange({ shootDate: `${startDate} to ${val}` });
+                    }}
+                    className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 transition-all outline-none"
+                  />
+                </div>
+              </div>
+            )}
+
+            {dateMode === 'custom' && (
+              <input
+                type="text"
+                value={form.shootDate}
+                onChange={(e) => onChange({ shootDate: e.target.value })}
+                placeholder="e.g. 26th - 28th July 2026 or Next Week"
+                className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-lg px-3 py-2 text-sm text-slate-900 transition-all outline-none"
+              />
+            )}
           </div>
 
           {/* Shoot Location */}
@@ -199,17 +416,21 @@ export const LeadInputForm: React.FC<LeadInputFormProps> = ({
             </select>
           </div>
 
-          {/* Source */}
-          <div>
+          {/* Lead Source */}
+          <div className="sm:col-span-2">
             <label className="block text-xs font-bold text-slate-700 mb-1">Lead Source</label>
             <select
               value={form.source}
               onChange={(e) => onChange({ source: e.target.value })}
               className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-lg px-3 py-2 text-sm text-slate-900 transition-all outline-none"
             >
-              <option value="Outbound">Outbound Call</option>
-              <option value="Inbound">Inbound Inquiry</option>
-              <option value="Partner Referral">Partner Referral</option>
+              <option value="Outbound Medical">Outbound Medical</option>
+              <option value="Inbound Medical">Inbound Medical</option>
+              <option value="No component">No component</option>
+              <option value="DDT medical">DDT medical</option>
+              <option value="NGO">NGO</option>
+              <option value="Non Medical">Non Medical</option>
+              <option value="SMA">SMA</option>
             </select>
           </div>
         </div>
@@ -228,7 +449,7 @@ export const LeadInputForm: React.FC<LeadInputFormProps> = ({
                   <FileAudio className="w-4 h-4 text-emerald-600" />
                   DDT Call Recording
                 </label>
-                <span className="text-[10px] text-slate-400">MP3, M4A, WAV, MP4</span>
+                <span className="text-[10px] text-slate-400">Up to 50MB (10-15+ mins)</span>
               </div>
 
               {!form.callRecording ? (
@@ -248,42 +469,42 @@ export const LeadInputForm: React.FC<LeadInputFormProps> = ({
                   onClick={() => audioInputRef.current?.click()}
                   className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all ${
                     audioDragOver
-                      ? 'border-indigo-500 bg-indigo-50'
-                      : 'border-slate-200 bg-slate-50/60 hover:border-indigo-400 hover:bg-slate-100/50'
+                      ? 'border-emerald-500 bg-emerald-50/50'
+                      : 'border-slate-200 hover:border-emerald-400 hover:bg-slate-50'
                   }`}
                 >
                   <input
-                    type="file"
                     ref={audioInputRef}
+                    type="file"
+                    accept="audio/*,video/*"
                     onChange={(e) => {
                       if (e.target.files && e.target.files[0]) {
                         handleAudioUpload(e.target.files[0]);
                       }
                     }}
-                    accept="audio/*,video/mp4,video/m4a,.m4a,.mp3,.wav,.aac,.ogg,.3gp"
                     className="hidden"
                   />
-                  <UploadCloud className="w-7 h-7 text-indigo-500 mx-auto mb-1.5" />
-                  <p className="text-xs font-semibold text-slate-700">
+                  <UploadCloud className="w-6 h-6 text-emerald-500 mx-auto mb-1" />
+                  <p className="text-xs font-medium text-slate-700">
                     Drop DDT Call Recording
                   </p>
                   <p className="text-[11px] text-slate-400 mt-0.5">
-                    MP3, M4A, WAV audio or video recording
+                    Supports 10–15+ min calls (up to 50MB — MP3, M4A, WAV, 3GP)
                   </p>
                 </div>
               ) : (
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2">
+                <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3 flex flex-col gap-2">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2 truncate">
-                      <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                    <div className="flex items-center gap-2 overflow-hidden">
+                      <div className="p-1.5 bg-emerald-600 text-white rounded-lg">
                         <Volume2 className="w-4 h-4" />
                       </div>
                       <div className="truncate">
                         <p className="text-xs font-bold text-slate-800 truncate">
                           {form.callRecording.fileName}
                         </p>
-                        <p className="text-[10px] text-slate-500">
-                          {(form.callRecording.fileSize / (1024 * 1024)).toFixed(2)} MB • {form.callRecording.fileType}
+                        <p className="text-[10px] text-emerald-700">
+                          {(form.callRecording.fileSize / (1024 * 1024)).toFixed(2)} MB • Ready for Analysis
                         </p>
                       </div>
                     </div>
@@ -293,30 +514,27 @@ export const LeadInputForm: React.FC<LeadInputFormProps> = ({
                         onChange({ callRecording: null });
                         setAudioPreviewUrl(null);
                       }}
-                      className="text-slate-400 hover:text-rose-600 p-1 rounded hover:bg-slate-200 transition-colors cursor-pointer"
+                      className="text-slate-400 hover:text-rose-600 p-1 rounded-lg hover:bg-white/50 transition-colors cursor-pointer"
                     >
                       <X className="w-4 h-4" />
                     </button>
                   </div>
 
-                  {/* HTML5 Audio Player Preview if available */}
                   {audioPreviewUrl && (
-                    <div className="pt-1">
-                      <audio controls src={audioPreviewUrl} className="w-full h-8 rounded text-xs" />
-                    </div>
+                    <audio controls src={audioPreviewUrl} className="w-full h-8 mt-1 rounded" />
                   )}
                 </div>
               )}
             </div>
 
-            {/* 2. Estimate Letter Attachment Box */}
+            {/* 2. Hospital Estimate Letter Box */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                  <FileText className="w-4 h-4 text-blue-600" />
+                  <FileText className="w-4 h-4 text-indigo-600" />
                   Hospital Estimate Letter
                 </label>
-                <span className="text-[10px] text-slate-400">PDF, JPG, PNG</span>
+                <span className="text-[10px] text-slate-400">PDF / Image</span>
               </div>
 
               {!form.estimateLetter ? (
@@ -336,48 +554,48 @@ export const LeadInputForm: React.FC<LeadInputFormProps> = ({
                   onClick={() => docInputRef.current?.click()}
                   className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all ${
                     docDragOver
-                      ? 'border-indigo-500 bg-indigo-50'
-                      : 'border-slate-200 bg-slate-50/60 hover:border-indigo-400 hover:bg-slate-100/50'
+                      ? 'border-indigo-500 bg-indigo-50/50'
+                      : 'border-slate-200 hover:border-indigo-400 hover:bg-slate-50'
                   }`}
                 >
                   <input
-                    type="file"
                     ref={docInputRef}
+                    type="file"
+                    accept="application/pdf,image/*"
                     onChange={(e) => {
                       if (e.target.files && e.target.files[0]) {
                         handleDocUpload(e.target.files[0]);
                       }
                     }}
-                    accept="application/pdf,image/png,image/jpeg,image/jpg,image/webp"
                     className="hidden"
                   />
-                  <UploadCloud className="w-7 h-7 text-indigo-500 mx-auto mb-1.5" />
-                  <p className="text-xs font-semibold text-slate-700">
-                    Drop Estimate Letter
+                  <UploadCloud className="w-6 h-6 text-indigo-500 mx-auto mb-1" />
+                  <p className="text-xs font-medium text-slate-700">
+                    Drop Hospital Estimate Letter
                   </p>
                   <p className="text-[11px] text-slate-400 mt-0.5">
-                    Upload official hospital estimate (PDF/Image)
+                    PDF document or high-res photo
                   </p>
                 </div>
               ) : (
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center justify-between">
-                  <div className="flex items-center space-x-2 truncate">
-                    <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+                <div className="bg-indigo-50/70 border border-indigo-200 rounded-xl p-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2 overflow-hidden">
+                    <div className="p-1.5 bg-indigo-600 text-white rounded-lg">
                       <FileCheck className="w-4 h-4" />
                     </div>
                     <div className="truncate">
                       <p className="text-xs font-bold text-slate-800 truncate">
                         {form.estimateLetter.fileName}
                       </p>
-                      <p className="text-[10px] text-slate-500">
-                        {(form.estimateLetter.fileSize / (1024 * 1024)).toFixed(2)} MB • {form.estimateLetter.fileType}
+                      <p className="text-[10px] text-indigo-700">
+                        {(form.estimateLetter.fileSize / 1024).toFixed(1)} KB • Attached
                       </p>
                     </div>
                   </div>
                   <button
                     type="button"
                     onClick={() => onChange({ estimateLetter: null })}
-                    className="text-slate-400 hover:text-rose-600 p-1 rounded hover:bg-slate-200 transition-colors cursor-pointer"
+                    className="text-slate-400 hover:text-rose-600 p-1 rounded-lg hover:bg-white/50 transition-colors cursor-pointer"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -386,29 +604,31 @@ export const LeadInputForm: React.FC<LeadInputFormProps> = ({
             </div>
           </div>
 
-          {/* Secondary Photos Uploads */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+          {/* Secondary Photos (Old Patient Pics & Hospital Shoot Pics) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
             {/* Old Patient Photos */}
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-xs text-slate-700 font-bold flex items-center gap-1">
-                  <ImageIcon className="w-3.5 h-3.5 text-amber-600" />
-                  Old Patient Photos ({form.oldPics.length})
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-medium text-slate-700 flex items-center gap-1">
+                  <ImageIcon className="w-3.5 h-3.5 text-slate-500" />
+                  Old Patient Photos (Optional)
                 </label>
                 <button
                   type="button"
                   onClick={() => oldPicsInputRef.current?.click()}
-                  className="text-[11px] text-indigo-600 hover:underline font-medium cursor-pointer"
+                  className="text-[11px] text-indigo-600 hover:underline font-semibold cursor-pointer"
                 >
                   + Add Photos
                 </button>
               </div>
               <input
-                type="file"
                 ref={oldPicsInputRef}
+                type="file"
                 multiple
                 accept="image/*"
-                onChange={(e) => e.target.files && handleOldPicsUpload(e.target.files)}
+                onChange={(e) => {
+                  if (e.target.files) handleOldPicsUpload(e.target.files);
+                }}
                 className="hidden"
               />
               {form.oldPics.length > 0 && (
@@ -422,7 +642,9 @@ export const LeadInputForm: React.FC<LeadInputFormProps> = ({
                       <button
                         type="button"
                         onClick={() =>
-                          onChange({ oldPics: form.oldPics.filter((_, i) => i !== idx) })
+                          onChange({
+                            oldPics: form.oldPics.filter((_, i) => i !== idx),
+                          })
                         }
                         className="text-slate-400 hover:text-rose-600 ml-1 cursor-pointer"
                       >
@@ -434,27 +656,29 @@ export const LeadInputForm: React.FC<LeadInputFormProps> = ({
               )}
             </div>
 
-            {/* Hospital / NICU Photos */}
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-xs text-slate-700 font-bold flex items-center gap-1">
-                  <ImageIcon className="w-3.5 h-3.5 text-rose-600" />
-                  Hospital / NICU Photos ({form.hospitalPics.length})
+            {/* Hospital Shoot Photos */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-medium text-slate-700 flex items-center gap-1">
+                  <ImageIcon className="w-3.5 h-3.5 text-slate-500" />
+                  Hospital Shoot Photos (Optional)
                 </label>
                 <button
                   type="button"
                   onClick={() => hospitalPicsInputRef.current?.click()}
-                  className="text-[11px] text-indigo-600 hover:underline font-medium cursor-pointer"
+                  className="text-[11px] text-indigo-600 hover:underline font-semibold cursor-pointer"
                 >
                   + Add Photos
                 </button>
               </div>
               <input
-                type="file"
                 ref={hospitalPicsInputRef}
+                type="file"
                 multiple
                 accept="image/*"
-                onChange={(e) => e.target.files && handleHospitalPicsUpload(e.target.files)}
+                onChange={(e) => {
+                  if (e.target.files) handleHospitalPicsUpload(e.target.files);
+                }}
                 className="hidden"
               />
               {form.hospitalPics.length > 0 && (
@@ -528,6 +752,113 @@ export const LeadInputForm: React.FC<LeadInputFormProps> = ({
           )}
         </div>
       </form>
+
+      {/* BD List Manager Modal */}
+      {isBdManagerOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl border border-slate-200 max-w-md w-full p-5 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+                  <User className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800">Manage BD / Case Managers List</h3>
+                  <p className="text-xs text-slate-500">Add or remove names to customize the dropdown</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsBdManagerOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Add New BD Input */}
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={newBdInput}
+                onChange={(e) => setNewBdInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddBd();
+                  }
+                }}
+                placeholder="Enter new BD Name (e.g. Ramesh Kumar)"
+                className="flex-1 bg-slate-50 border border-slate-200 focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-lg px-3 py-2 text-xs text-slate-900 outline-none"
+              />
+              <button
+                type="button"
+                onClick={handleAddBd}
+                className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1 shadow-xs cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" /> Add
+              </button>
+            </div>
+
+            {/* Existing BD List */}
+            <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                Active BD Names ({bdList.length})
+              </span>
+              {bdList.map((name) => (
+                <div
+                  key={name}
+                  className="flex items-center justify-between p-2 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200/60 transition-colors text-xs text-slate-800"
+                >
+                  <span className="font-medium">{name}</span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onChange({ bdName: name });
+                        setIsBdManagerOpen(false);
+                      }}
+                      className="px-2 py-0.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded text-[11px] font-semibold cursor-pointer"
+                    >
+                      Select
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteBd(name)}
+                      className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer"
+                      title="Remove BD Name"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Modal Actions Footer */}
+            <div className="flex justify-between items-center pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirm('Reset BD list back to defaults?')) {
+                    saveBdList(DEFAULT_BD_LIST);
+                  }
+                }}
+                className="text-[11px] text-slate-400 hover:text-slate-600 hover:underline cursor-pointer"
+              >
+                Reset to Defaults
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsBdManagerOpen(false)}
+                className="px-4 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-semibold shadow-xs cursor-pointer"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

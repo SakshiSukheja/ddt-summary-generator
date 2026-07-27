@@ -1,123 +1,60 @@
-import { GoogleGenAI } from '@google/genai';
 import { DDTInputForm, GeneratedCaseSummary, CaseHistoryItem, FilePayload } from '../types';
 
-// Read API Key from environment variable
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
-const ai = new GoogleGenAI({ apiKey: API_KEY });
-
 export async function generateCaseSummary(input: DDTInputForm): Promise<GeneratedCaseSummary> {
+  const response = await fetch('/api/generate-summary', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(input),
+  });
+
+  const rawText = await response.text();
+
+  let data: any;
   try {
-    if (!API_KEY) {
-      throw new Error('Missing Gemini API Key. Please configure VITE_GEMINI_API_KEY in environment variables.');
+    data = JSON.parse(rawText);
+  } catch {
+    if (response.status === 413 || rawText.includes('413') || rawText.includes('Payload Too Large')) {
+      throw new Error('The uploaded files (audio/PDF) exceed Vercel serverless payload size limit (4.5MB). Please upload a smaller audio clip (under 3MB) or shorter PDF.');
     }
-
-    const contents: any[] = [];
-
-    // Attach call recording audio if available
-    if (input.audioFile?.base64) {
-      const base64Data = input.audioFile.base64.split(',')[1] || input.audioFile.base64;
-      contents.push({
-        inlineData: {
-          mimeType: input.audioFile.fileType,
-          data: base64Data,
-        },
-      });
+    if (response.status === 504 || rawText.includes('504') || rawText.includes('Timeout')) {
+      throw new Error('Server request timed out while processing audio/documents. Try uploading a shorter audio file or fewer documents.');
     }
-
-    // Attach estimate letter document if available
-    if (input.estimateFile?.base64) {
-      const base64Data = input.estimateFile.base64.split(',')[1] || input.estimateFile.base64;
-      contents.push({
-        inlineData: {
-          mimeType: input.estimateFile.fileType,
-          data: base64Data,
-        },
-      });
+    if (response.status === 404) {
+      throw new Error('API route /api/generate-summary was not found (404). If deployed on Vercel, ensure GEMINI_API_KEY is added in Vercel Project Settings and redeployed.');
     }
+    throw new Error(`Server returned HTML error (${response.status}): ${rawText.replace(/<[^>]*>/g, '').slice(0, 200).trim() || 'Invalid response from server'}`);
+  }
 
-    // Add prompt instructions for Gemini
-    const prompt = `
-    Analyze the uploaded files for patient ${input.patientName} (BD: ${input.bdName}, Shoot Date: ${input.shootDate}).
-    Translate any Indian regional language audio into English and extract details into this exact Jira summary format:
+  if (!response.ok) {
+    throw new Error(data?.error || `Server error (${response.status})`);
+  }
 
-    Shoot Date:- ${input.shootDate} Confirmed with the campaigner
-    BD Name: ${input.bdName}
+  if (!data.caseSummary) {
+    throw new Error(data?.error || 'Invalid response format received from server.');
+  }
 
-    Shoot will be done at the Hospital.
+  return data.caseSummary;
+}
 
-    DDT Review: [Extract diagnosis from audio/estimate]
-
-    Shoot Note: [Confirmed with family regarding shoot availability]
-
-    Dear Team,
-
-    Please find the details of the lead being referred for Marketing :
-
-    PATIENT’S DETAILS
-     
-    Patient name: ${input.patientName}
-    Patient relatives: [Extract from audio]
-    Disease suffering: [Extract from document/audio]
-    Patient Age: [Extract from audio]
-    Contact number: [Extract]
-    Email : [Extract]
-    Languages known by the patient's relatives: [Extract]
-    Potential of the lead: high
-
-    Amount Needed for: [Amount from estimate]
-    T&S Doctor approved amount  - [Amount]
-    How urgent is the case and why? - [Urgency from audio]
-    Estimated Date/Month of Surgery : [Extract]
-    What is the current status of the patient : [Extract status]
-    Amount Spent by Family Till Now : [Extract amount]
-    How did the family manage to pay bills till now - [Extract]
-
-    A small background of the patient: [3-4 sentence background]
-
-    Father's work: [Extract]
-    Mother's work: [Extract]
-
-    Authenticity Check
-    Source: Outbound
-    City: [Extract]
-    Hospital Name: [Extract]
-
-    Estimate Attached- Yes
-    Does Estimate have stamp and seal : Yes
-    Does Estimate look genuine? : Yes
-    Call Recording is attached? : Yes
-    Family is comfortable with pricing? Yes 
-    Family is comfortable with shoot? : Yes
-    `;
-
-    contents.push(prompt);
-
-    // Call Gemini Model
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-lite',
-      contents: contents,
-    });
-
-    const generatedText = response.text || 'Failed to generate summary.';
-
-    const caseSummary: GeneratedCaseSummary = {
-      id: `case_${Date.now()}`,
-      createdAt: new Date().toISOString(),
-      patientName: input.patientName,
-      bdName: input.bdName,
-      shootDate: input.shootDate,
-      fullText: generatedText,
-      structuredData: {
-        disease: 'Extracted via Multimodal AI',
-        hospitalName: 'Extracted via Estimate Letter',
-        totalEstimateAmount: 'See summary',
-      },
-    };
-
-    return caseSummary;
-  } catch (err: any) {
-    console.error('Gemini generation error:', err);
-    throw new Error(err?.message || 'Failed to generate case summary.');
+export function inferMimeType(fileName: string): string {
+  const ext = fileName.toLowerCase().split('.').pop() || '';
+  switch (ext) {
+    case 'mp3': return 'audio/mp3';
+    case 'm4a': return 'audio/mp4';
+    case 'wav': return 'audio/wav';
+    case 'aac': return 'audio/aac';
+    case 'ogg': return 'audio/ogg';
+    case '3gp': return 'audio/3gpp';
+    case 'mp4': return 'audio/mp4';
+    case 'webm': return 'audio/webm';
+    case 'pdf': return 'application/pdf';
+    case 'jpg':
+    case 'jpeg': return 'image/jpeg';
+    case 'png': return 'image/png';
+    case 'webp': return 'image/webp';
+    default: return 'application/octet-stream';
   }
 }
 
@@ -126,9 +63,10 @@ export function fileToFilePayload(file: File): Promise<FilePayload> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
+      const fileType = file.type && file.type !== 'application/octet-stream' ? file.type : inferMimeType(file.name);
       resolve({
         fileName: file.name,
-        fileType: file.type || 'application/octet-stream',
+        fileType,
         fileSize: file.size,
         base64: reader.result as string,
       });
