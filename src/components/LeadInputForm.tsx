@@ -124,10 +124,11 @@ export const LeadInputForm: React.FC<LeadInputFormProps> = ({
   };
 
   // Handle Call Recording Upload
+  const MAX_RECOMMENDED_BYTES = 3.2 * 1024 * 1024; // 3.2MB binary = ~4.4MB Base64
+
   const handleAudioUpload = async (file: File) => {
-    if (file.size > 50 * 1024 * 1024) {
-      alert('File is too large! Please upload an audio file under 50MB.');
-      return;
+    if (file.size > MAX_RECOMMENDED_BYTES) {
+      alert(`⚠️ Vercel Payload Size Warning:\n\nThis audio file is ${(file.size / (1024 * 1024)).toFixed(1)} MB.\nVercel serverless functions have a strict 4.5 MB HTTP request limit (~3.2 MB binary file limit).\n\nPlease compress this audio clip (e.g. 32kbps/64kbps MP3) or trim it under 3.2 MB so it can be processed without a 413 error on Vercel.`);
     }
     try {
       const payload = await fileToFilePayload(file);
@@ -179,7 +180,17 @@ export const LeadInputForm: React.FC<LeadInputFormProps> = ({
     }
   };
 
-  const isSubmitDisabled = isGenerating || !form.patientName.trim();
+  // Calculate total payload size
+  const totalFileBytes =
+    (form.callRecording?.fileSize || 0) +
+    (form.estimateLetter?.fileSize || 0) +
+    form.oldPics.reduce((sum, f) => sum + f.fileSize, 0) +
+    form.hospitalPics.reduce((sum, f) => sum + f.fileSize, 0);
+
+  const totalFileMB = (totalFileBytes / (1024 * 1024)).toFixed(2);
+  const isPayloadTooLarge = totalFileBytes > MAX_RECOMMENDED_BYTES;
+
+  const isSubmitDisabled = isGenerating || !form.patientName.trim() || isPayloadTooLarge;
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
@@ -449,7 +460,7 @@ export const LeadInputForm: React.FC<LeadInputFormProps> = ({
                   <FileAudio className="w-4 h-4 text-emerald-600" />
                   DDT Call Recording
                 </label>
-                <span className="text-[10px] text-slate-400">Up to 50MB (10-15+ mins)</span>
+                <span className="text-[10px] text-amber-600 font-medium">Max ~3.2MB (Vercel Serverless)</span>
               </div>
 
               {!form.callRecording ? (
@@ -489,7 +500,7 @@ export const LeadInputForm: React.FC<LeadInputFormProps> = ({
                     Drop DDT Call Recording
                   </p>
                   <p className="text-[11px] text-slate-400 mt-0.5">
-                    Supports 10–15+ min calls (up to 50MB — MP3, M4A, WAV, 3GP)
+                    MP3, M4A, WAV, 3GP (Compressed under 3.2MB for Vercel)
                   </p>
                 </div>
               ) : (
@@ -724,6 +735,18 @@ export const LeadInputForm: React.FC<LeadInputFormProps> = ({
 
         {/* Submit Action Button */}
         <div className="pt-1">
+          {isPayloadTooLarge && (
+            <div className="p-3 mb-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold">Total file size ({totalFileMB} MB) exceeds Vercel's limit (3.2 MB max)</p>
+                <p className="text-[11px] text-amber-700 mt-0.5">
+                  Vercel serverless functions cap request bodies at 4.5 MB (~3.2 MB binary files after base64 encoding). Please upload a smaller audio clip (under 3.2 MB) or compress the MP3 file before submitting.
+                </p>
+              </div>
+            </div>
+          )}
+
           <button
             type="submit"
             disabled={isSubmitDisabled}
