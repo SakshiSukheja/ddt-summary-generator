@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { DDTInputForm, FilePayload } from '../types';
 import { fileToFilePayload } from '../services/api';
-import { compressAudioForVercel } from '../utils/audioCompressor.ts';
+import { compressAudioForVercel } from '../utils/audioCompressor';
 
 const DEFAULT_BD_LIST = [
   'Rohan Sharma',
