@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'http';
-import { processDdtSummaryRequest } from '../src/server/ddtGenerator.js';
+import { processDdtSummaryRequest } from '../src/server/ddtGenerator';
 
 export default async function handler(req: IncomingMessage & { body?: any }, res: ServerResponse & { status?: any; json?: any }) {
   // CORS Headers
